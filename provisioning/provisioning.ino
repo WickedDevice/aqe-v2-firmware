@@ -70,8 +70,8 @@ const long magic_number = 0x5485;
 char buffer[700];
 uint32_t ip;
 
-#define WLAN_SSID       "WickedDevice"           // cannot be longer than 32 characters!
-#define WLAN_PASS       "wildfire123"
+#define WLAN_SSID       "NETWORK_ID"           // cannot be longer than 32 characters!
+#define WLAN_PASS       "PASSWORD"
 // Security can be WLAN_SEC_UNSEC, WLAN_SEC_WEP, WLAN_SEC_WPA or WLAN_SEC_WPA2
 #define WLAN_SECURITY   WLAN_SEC_WPA2
 
