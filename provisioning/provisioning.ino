@@ -4,23 +4,18 @@
 *  User can then enter calibration data for sensors.
 */
 #include <sha1.h>
-//#include <SoftReset.h>
-//#include <StackPaint.h>
 #include <avr/wdt.h>
 #include <avr/eeprom.h>
 #include <ccspi.h>
 #include <SPI.h>
 #include <WildFire.h>
 #include <WildFire_CC3000.h>
-//#include "MemoryLocations.h"
 
 WildFire wf;
 WildFire_CC3000 cc3000;
 int sm_button = 5;
 int time = 0;
-//extern uint8_t mymac[6];
-uint8_t mymac[6];// = {10,10,10,10,10,10};           
-//extern char website[] PROGMEM;
+uint8_t mymac[6];// = {10,10,10,10,10,10}; //for testing           
 #define WEBSITE "api.xively.com"
 #define ACTIVATION_URL_LENGTH   52 // always 40 char code + "/activation" + null terminator
 #define ACTIVATION_CODE_LENGTH  41 // always 40 characters + null terminator
@@ -78,7 +73,6 @@ uint32_t ip;
 void setup() {
   wf.begin();
   pinMode(sm_button, INPUT_PULLUP);
-//lcd.begin(16,2);
   Serial.begin(115200);
 
   Serial.println("Welcome to AQE calibration setup!");
@@ -124,21 +118,13 @@ void setup() {
     cc3000.getHostByName("api.xively.com", &ip);
   }
   cc3000.printIPdotsRev(ip);
-  Serial.println();
-  // 173.203.98.29
-/*  ip = 29;
-  ip |= (((uint32_t) 98) << 8);
-  ip |= (((uint32_t) 203) << 16);
-  ip |= (((uint32_t) 173) << 24);
-*/
-   //wdt_reset();   
+  Serial.println(); 
    
   activateWithCosm();
   
   initialize_eeprom();
   Serial.println();
   Serial.println("AQE setup complete.");
-  //while(1);
 }
 
 void loop() {
@@ -166,7 +152,7 @@ void initialize_eeprom() {
     Serial.print("NO2 sensor : "); printDouble(NO2_M, 6); Serial.println();
     Serial.print("O3 sensor : "); printDouble(O3_M, 6); Serial.println();
     Serial.println();
-    Serial.println("Would you like to reprogram? (y/n)");
+    Serial.println("Would you like to reset these values? Current data will be overwritten! (y/n)");
     while(Serial.available() <= 0);
     if (Serial.available() > 0) {
       char response = Serial.read();
@@ -274,6 +260,7 @@ void computeActivationUrl(char * activation_url){
   
   //Air Quality Egg v01 Product Secret:
   //e54c89cf2b916934a288304b6f7630e5b9aad8c8
+  //TODO: update to AQE v2 product secret
   uint8_t deviceKey[] ={ 
     0xe5,0x4c,0x89,0xcf,0x2b,0x91,0x69,0x34,0xa2,0x88,
     0x30,0x4b,0x6f,0x76,0x30,0xe5,0xb9,0xaa,0xd8,0xc8
@@ -287,6 +274,8 @@ void computeActivationUrl(char * activation_url){
    }
   
   char serial_number[18] = {0};
+  Serial.println();
+  Serial.println(F("**********************************************************************************"));
   Serial.print(F("Serial #: "));
   for(uint8_t ii = 0; ii < 6; ii++){
     convertByteArrayToAsciiHex(mymac + ii, serial_number + 3*ii, 1);
@@ -294,7 +283,8 @@ void computeActivationUrl(char * activation_url){
     else serial_number[3*ii+2] = ':';
   }
   Serial.println(serial_number);  
-  
+  Serial.println(F("**********************************************************************************"));
+  Serial.println();
   //--- generate SHA1
   Serial.println(F("compute sha: "));
   
@@ -357,8 +347,6 @@ static void provisioningCallback (char *dbuf) {
       Serial.print(F("FEED LENGTH = "));
       Serial.println(feed_id_strlen);
       eeprom_write(PROVISIONING_STATUS_GOOD, ACTIVATION_STATUS);   
-      //rgb.setColor(green);
-	  //TODO: add egg side status indicator?
       delay(2000);
       return; 
     }
@@ -406,26 +394,18 @@ void doProvisioning(){
       Serial.print(MAX_ACTIVATION_ATTEMPTS);
       Serial.println(F(" times, restarting"));
       Serial.flush();
-      //rgb.setColor(red);
       delay(10000);      
       soft_reset(); // better reset at this point...
     }
     
     WildFire_CC3000_Client client = cc3000.connectTCP(ip, 80);
     if (client.connected()) {
-      //Serial.print("GET ");
       client.fastrprint(F("GET "));
-      //Serial.print("/v2/devices/");
       client.fastrprint("/v2/devices/");
-      //Serial.print(activation_url);
       client.fastrprint(activation_url);
-      //Serial.print(" HTTP/1.0\r\n");
       client.fastrprint(F(" HTTP/1.0\r\n"));
-      //Serial.print("Host: "); Serial.print("api.xively.com"); Serial.print("\r\n");
       client.fastrprint(F("Host: ")); client.fastrprint("api.xively.com"); client.fastrprint(F("\r\n"));
-      //Serial.print("\r\n");
       client.fastrprint(F("\r\n"));
-      //Serial.println();
       client.println();
     } else {
       Serial.println(F("Connection failed"));    
@@ -444,7 +424,6 @@ void doProvisioning(){
         int i = 0;
         while (client.available()) {
           char c = client.read();
-          //Serial.print(c);
           dbuf[i] = c;
           i++;
           lastRead = millis();
@@ -486,7 +465,7 @@ void printDouble( double val, byte precision){
 // prints val with number of decimal places determine by precision
 // NOTE: precision is 1 followed by the number of zeros for the desired number of decimial places
 // example: printDouble( 3.1415, 100); // prints 3.14 (two decimal places)
-if (val < 0) {
+if (val < 0 && val > -1) {
   Serial.print("-");
 }
 Serial.print (int(val));  //prints the int part
