@@ -10,6 +10,7 @@
 #include <SPI.h>
 #include <WildFire.h>
 #include <WildFire_CC3000.h>
+#include "MemoryLocations.h"
 
 WildFire wf;
 WildFire_CC3000 cc3000;
@@ -17,16 +18,6 @@ int sm_button = 5;
 int time = 0;
 uint8_t mymac[6];// = {10,10,10,10,10,10}; //for testing           
 #define WEBSITE "api.xively.com"
-#define ACTIVATION_URL_LENGTH   52 // always 40 char code + "/activation" + null terminator
-#define ACTIVATION_CODE_LENGTH  41 // always 40 characters + null terminator
-#define API_KEY_LENGTH          49 // maximum length including null terminator
-#define FEED_ID_LENGTH          17 // maximum length including null terminator
-
-#define eeprom_read_to(dst_p, eeprom_field, dst_size) eeprom_read_block(dst_p, (void *)offsetof(__eeprom_data, eeprom_field), MIN(dst_size, sizeof((__eeprom_data*)0)->eeprom_field))
-#define eeprom_read(dst, eeprom_field) eeprom_read_to(&dst, eeprom_field, sizeof(dst))
-#define eeprom_write_from(src_p, eeprom_field, src_size) eeprom_write_block(src_p, (void *)offsetof(__eeprom_data, eeprom_field), MIN(src_size, sizeof((__eeprom_data*)0)->eeprom_field))
-#define eeprom_write(src, eeprom_field) { typeof(src) x = src; eeprom_write_from(&x, eeprom_field, sizeof(x)); }
-#define MIN(x,y) ( x > y ? y : x )
 
 #define PROVISIONING_STATUS_GOOD 0x73
 boolean activated = false;
@@ -47,16 +38,6 @@ void wdt_init(void)
     wdt_disable();
     return;
 }
-
-struct __eeprom_data {
-  long magic;
-  double CO_cal;
-  double NO2_cal;
-  double O3_cal;
-  char API_KEY[49];
-  char FEED_ID[17];
-  char ACTIVATION_STATUS[41];
-};
 
 double CO_M;
 double NO2_M;
@@ -136,7 +117,7 @@ void loop() {
 */
 void initialize_eeprom() {
    long magic;
-  eeprom_read(magic, magic);
+  eeprom_read_block(&magic, (const void*)CAL_MAGIC, sizeof(float));
   if(magic != magic_number) {
     Serial.println("\nSetting sensor calibration values....");
     _initialize_eeprom();
@@ -144,9 +125,9 @@ void initialize_eeprom() {
   else {
     Serial.println("It looks like this egg has already been programmed with calibration data!");
     Serial.println();    
-    eeprom_read(CO_M, CO_cal);
-    eeprom_read(NO2_M, NO2_cal);
-    eeprom_read(O3_M, O3_cal);
+    eeprom_read_block(&CO_M, (const void*)CO_cal, sizeof(float));
+    eeprom_read_block(&NO2_M, (const void*)NO2_cal, sizeof(float));
+    eeprom_read_block(&O3_M, (const void*)O3_cal, sizeof(float));
     Serial.println("The current values are :");
     Serial.print("CO sensor : "); printDouble(CO_M, 6); Serial.println();
     Serial.print("NO2 sensor : "); printDouble(NO2_M, 6); Serial.println();
@@ -203,13 +184,13 @@ void _initialize_eeprom() {
       response = Serial.read();
     }
     if (response == 'y') {
-      eeprom_write(CO_M, CO_cal);
-      eeprom_write(NO2_M, NO2_cal);
-      eeprom_write(O3_M, O3_cal);
-      eeprom_write(magic_number, magic);
-      eeprom_read(CO_M, CO_cal);
-      eeprom_read(NO2_M, NO2_cal);
-      eeprom_read(O3_M, O3_cal);
+      eeprom_write_block(&CO_M, (void*)CO_cal, sizeof(float));
+      eeprom_write_block(&NO2_M, (void*)NO2_cal, sizeof(float));
+      eeprom_write_block(&O3_M, (void*)O3_cal, sizeof(float));
+      eeprom_write_block(&magic_number, (void*)CAL_MAGIC, sizeof(long));
+      eeprom_read_block(&CO_M, (const void*)CO_cal, sizeof(float));
+      eeprom_read_block(&NO2_M, (const void*)NO2_cal, sizeof(float));
+      eeprom_read_block(&O3_M, (const void*)O3_cal, sizeof(float));
       Serial.println();
       Serial.println("Wrote calibration data :");
       Serial.print("CO sensor : ");
@@ -272,7 +253,7 @@ void computeActivationUrl(char * activation_url){
   	Serial.println("Could not get MAC address!");
   	while (1); //TODO: is this correct behavior?
    }
-  
+ 
   char serial_number[18] = {0};
   Serial.println();
   Serial.println(F("**********************************************************************************"));
@@ -346,7 +327,7 @@ static void provisioningCallback (char *dbuf) {
       Serial.println(api_key_strlen);        
       Serial.print(F("FEED LENGTH = "));
       Serial.println(feed_id_strlen);
-      eeprom_write(PROVISIONING_STATUS_GOOD, ACTIVATION_STATUS);   
+      eeprom_write_byte((uint8_t *) ACTIVATION_STATUS_EEPROM_ADDRESS, PROVISIONING_STATUS_GOOD);   
       delay(2000);
       return; 
     }
@@ -363,10 +344,15 @@ static void provisioningCallback (char *dbuf) {
 #define INITIAL_PACKET_DELAY_MS      10000L // 10 seconds
 #define ACTIVATION_RETRY_INTERVAL_MS 15000L // retry every 15 seconds
 void activateWithCosm(){
-  uint8_t test;
-  eeprom_read(test, ACTIVATION_STATUS);
+  uint8_t test = eeprom_read_byte((const uint8_t *) ACTIVATION_STATUS_EEPROM_ADDRESS);
   if(test == PROVISIONING_STATUS_GOOD){
     Serial.println(F("Previously provisioned"));
+    char api_key[API_KEY_LENGTH];
+    char feedID[FEED_ID_LENGTH];
+    eeprom_read_block(api_key, (const void*)API_KEY_EEPROM_ADDRESS, API_KEY_LENGTH);
+    eeprom_read_block(feedID, (const void*)FEED_ID_EEPROM_ADDRESS, FEED_ID_LENGTH); 
+    Serial.print("API key: "); Serial.println(api_key);
+    Serial.print("Feed ID: "); Serial.println(feedID);   
     return;   
   }
   else{ 
@@ -450,13 +436,13 @@ void doProvisioning(){
 }
 
 void setApiKeyInEEPROM(char * api_key){
-  eeprom_write(api_key, API_KEY);
+  eeprom_write_block(api_key, (void*)API_KEY_EEPROM_ADDRESS, API_KEY_LENGTH);
   Serial.print(F("Wrote API KEY to EEPROM: "));
   Serial.println(api_key);
 }
 
 void setFeedIdInEEPROM(char * feed_id){
-  eeprom_write(feed_id, FEED_ID);
+  eeprom_write_block(feed_id, (void*)FEED_ID_EEPROM_ADDRESS, FEED_ID_LENGTH);
   Serial.print(F("Wrote FEED ID to EEPROM: "));
   Serial.println(feed_id);
 }
