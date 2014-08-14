@@ -42,7 +42,7 @@ void wdt_init(void)
 double CO_M;
 double NO2_M;
 double O3_M;
-const long magic_number = 0x5485;
+const long magic_number = 0x5485; //must match the magic number in the production sketch
 char buffer[700];
 uint32_t ip;
 
